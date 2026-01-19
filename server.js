@@ -31,7 +31,7 @@ const openai = new OpenAI({
 // ----- LOCATIONS (STRICT ORDER, 1 CLUE EACH) -----
 const LOCATIONS = [
   {
-    answers: ["wellington"],
+    answers: ["wellington", "duke of wellington"],
     clue: `Rubber treads where leather once would step,
 A victor waits where coin and columns bide.
 Seek the Duke whose name keeps rain at bay`,
@@ -62,8 +62,13 @@ Meat is king — you’ve found the Hawk of Moor.`,
 // ----- CHAT ENDPOINT -----
 app.post("/chat", async (req, res) => {
   try {
-    // Init game per user
-    if (!req.session.game) {
+    // ----- SAFE SESSION INIT / REPAIR -----
+    if (
+      !req.session.game ||
+      typeof req.session.game.index !== "number" ||
+      req.session.game.index < 0 ||
+      req.session.game.index > LOCATIONS.length
+    ) {
       req.session.game = {
         started: false,
         index: 0,
@@ -90,12 +95,18 @@ app.post("/chat", async (req, res) => {
 
     // ----- END GAME -----
     if (!current) {
+      req.session.game = {
+        started: false,
+        index: 0,
+        clueGiven: false,
+      };
+
       return res.json({
-        reply: "🎉 You’ve completed the entire adventure. Well done.",
+        reply: "🎉 You’ve completed the entire adventure. Say hello to play again.",
       });
     }
 
-    // ----- CLUE HANDLING (LOCKED) -----
+    // ----- CLUE -----
     if (message === "clue" || message === "hint") {
       if (game.clueGiven) {
         return res.json({
@@ -107,12 +118,23 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: current.clue });
     }
 
-    // ----- CHECK GUESS -----
-    const correct = current.answers.some((ans) =>
+    // ----- YES / NO CHECK (“is it the …”) -----
+    if (message.startsWith("is it")) {
+      const correct = current.answers.some((ans) =>
+        message.includes(ans)
+      );
+
+      return res.json({
+        reply: correct ? "Yes." : "No.",
+      });
+    }
+
+    // ----- DIRECT GUESS -----
+    const guessedCorrectly = current.answers.some((ans) =>
       message.includes(ans)
     );
 
-    if (correct) {
+    if (guessedCorrectly) {
       game.index++;
       game.clueGiven = false;
 
@@ -127,21 +149,21 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // ----- AI FACTUAL QUESTIONS ONLY -----
+    // ----- AI: FACTUAL QUESTIONS ONLY -----
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content: `
-You are a strict London game moderator.
+You are a strict London adventure moderator.
 
 Rules:
-- You may answer short factual questions.
-- If the user asks for help solving, say they must use the clue.
-- Never reveal or imply landmark names.
-
-If a question would act as a hint, politely refuse.
+- Answer short factual questions only.
+- Never confirm, deny, or imply a landmark name.
+- If the question helps solve the puzzle, politely refuse.
+- Do not invent clues.
+- Keep answers brief.
           `,
         },
         { role: "user", content: message },
@@ -155,7 +177,7 @@ If a question would act as a hint, politely refuse.
   } catch (err) {
     console.error("🔥 SERVER ERROR:", err);
     res.json({
-      reply: "Bot: Something went wrong, but the game is still active.",
+      reply: "Bot: Something went wrong, but the game is still running.",
     });
   }
 });
