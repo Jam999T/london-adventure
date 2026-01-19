@@ -9,44 +9,29 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 const app = express();
-
-/* ---------- MIDDLEWARE ---------- */
-app.use(
-  cors({
-    origin: true,
-    credentials: true, // ⭐ REQUIRED FOR SESSIONS
-  })
-);
-
+app.use(cors());
 app.use(express.json());
 
+// ----- SESSION SETUP (MULTIPLE USERS) -----
 app.use(
   session({
     secret: "london-adventure-secret",
     resave: false,
     saveUninitialized: true,
-    cookie: {
-      secure: false, // must be false for localhost
-    },
   })
 );
 
-/* ---------- STATIC FILES ---------- */
+// ----- STATIC FILES -----
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ---------- OPENAI ---------- */
-if (!process.env.OPENAI_API_KEY) {
-  console.error("❌ Missing OPENAI_API_KEY");
-  process.exit(1);
-}
-
+// ----- OPENAI -----
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/* ---------- LOCATIONS (LOCKED ORDER) ---------- */
+// ----- LOCATIONS (ORDER LOCKED) -----
 const LOCATIONS = [
   {
     answer: "wellington",
@@ -54,8 +39,8 @@ const LOCATIONS = [
     hints: [
       "It’s in London’s financial district.",
       "It stands close to a famous central bank.",
-      "It is an equestrian statue of a military leader.",
-    ],
+      "It is an equestrian statue of a military leader."
+    ]
   },
   {
     answer: "monument",
@@ -63,8 +48,8 @@ const LOCATIONS = [
     hints: [
       "It is near the River Thames.",
       "It is a tall stone column.",
-      "It remembers a great disaster in London’s past.",
-    ],
+      "It remembers a great disaster in London’s past."
+    ]
   },
   {
     answer: "hinde",
@@ -72,19 +57,20 @@ const LOCATIONS = [
     hints: [
       "It is south of the river.",
       "It is near Borough Market.",
-      "It is a historic sailing ship.",
-    ],
-  },
+      "It is a historic sailing ship."
+    ]
+  }
 ];
 
-/* ---------- CHAT ---------- */
+// ----- CHAT ENDPOINT -----
 app.post("/chat", async (req, res) => {
   try {
+    // Create game state PER USER
     if (!req.session.game) {
       req.session.game = {
         started: false,
         locationIndex: 0,
-        hintIndex: -1,
+        hintIndex: -1
       };
     }
 
@@ -95,15 +81,29 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "Say something to begin." });
     }
 
+    // ----- FIRST MESSAGE -----
     if (!game.started) {
       game.started = true;
       return res.json({
-        reply: "Welcome to London Adventure. Ask for a hint to begin.",
+        reply: "Welcome to London Adventure! Ask for a hint to begin."
       });
     }
 
     const current = LOCATIONS[game.locationIndex];
 
+    // ----- SAFETY CHECK: END OF GAME -----
+    if (!current) {
+      req.session.game = {
+        started: false,
+        locationIndex: 0,
+        hintIndex: -1
+      };
+      return res.json({
+        reply: "🎉 You’ve completed the London Adventure! Refresh the page to play again."
+      });
+    }
+
+    // ----- FIRST HINT (RHYME) -----
     if (message === "hint") {
       if (game.hintIndex === -1) {
         game.hintIndex = 0;
@@ -112,6 +112,7 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "Ask for the next hint." });
     }
 
+    // ----- NEXT HINTS -----
     if (message === "next hint") {
       if (game.hintIndex < current.hints.length) {
         const hint = current.hints[game.hintIndex];
@@ -121,50 +122,57 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "No more hints. Make your guess." });
     }
 
+    // ----- GUESS CHECK -----
     if (message.includes(current.answer)) {
       game.locationIndex++;
       game.hintIndex = -1;
 
       if (game.locationIndex >= LOCATIONS.length) {
+        req.session.game = {
+          started: false,
+          locationIndex: 0,
+          hintIndex: -1
+        };
         return res.json({
-          reply: "Correct! You have completed the London Adventure 🎉",
+          reply: "Correct! 🎉 You have completed the London Adventure!"
         });
       }
 
-      return res.json({ reply: "Correct! Ask for a hint to continue." });
+      return res.json({
+        reply: "Correct! Ask for a hint to continue."
+      });
     }
 
-    /* ---------- AI QUESTIONS ---------- */
+    // ----- AI QUESTION ANSWER -----
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content:
-            "You are a London adventure guide. Answer briefly. Never reveal the landmark name.",
+          content: `
+You are a London adventure guide.
+Answer short factual questions.
+Never reveal the landmark name.
+Never skip locations.
+Be indirect and concise.
+          `
         },
-        { role: "user", content: message },
+        { role: "user", content: message }
       ],
       max_tokens: 50,
-      temperature: 0.3,
+      temperature: 0.3
     });
 
-    return res.json({ reply: ai.choices[0].message.content });
+    res.json({ reply: ai.choices[0].message.content });
+
   } catch (err) {
-    console.error("🔥 SERVER ERROR:", err.message);
-    return res.json({
-      reply: "Sorry — something went wrong, but I'm still here.",
-    });
+    console.error(err);
+    res.json({ reply: "Bot: Sorry — something went wrong, but I'm still here." });
   }
 });
 
-/* ---------- HEALTH CHECK ---------- */
-app.get("/", (req, res) => {
-  res.send("✅ London Adventure server running");
-});
-
-/* ---------- START ---------- */
+// ----- START SERVER -----
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 London Adventure running on http://localhost:${PORT}`);
+  console.log(`✅ London Adventure running on port ${PORT}`);
 });
