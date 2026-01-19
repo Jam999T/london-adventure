@@ -31,12 +31,14 @@ const openai = new OpenAI({
 // ----- LOCATIONS (STRICT ORDER, 1 CLUE EACH) -----
 const LOCATIONS = [
   {
+    name: "Wellington Statue",
     answers: ["wellington", "duke of wellington"],
     clue: `Rubber treads where leather once would step,
 A victor waits where coin and columns bide.
 Seek the Duke whose name keeps rain at bay`,
   },
   {
+    name: "The Monument",
     answers: ["monument"],
     clue: `Count the year when flames wore hell’s own mark,
 Six, six, six — the City turned to dark.
@@ -44,6 +46,7 @@ Measure two-oh-two from where the baker stood,
 And rise in stone where fire was understood.`,
   },
   {
+    name: "Golden Hinde",
     answers: ["golden hinde", "hinde"],
     clue: `She ringed the world, a wooden line on blue,
 Knighted thief of crowns and oceans too.
@@ -51,6 +54,7 @@ Spanish gold grew lighter in her wake,
 Find Drake’s old galleon — history at anchor, awake.`,
   },
   {
+    name: "Hawksmoor Borough",
     answers: ["hawksmoor"],
     clue: `Beasts meet flame where iron once was weighed,
 Cut and time are honoured, not betrayed.
@@ -62,7 +66,7 @@ Meat is king — you’ve found the Hawk of Moor.`,
 // ----- CHAT ENDPOINT -----
 app.post("/chat", async (req, res) => {
   try {
-    // ----- SAFE SESSION INIT / REPAIR -----
+    // ----- SAFE SESSION INIT -----
     if (
       !req.session.game ||
       typeof req.session.game.index !== "number" ||
@@ -102,7 +106,7 @@ app.post("/chat", async (req, res) => {
       };
 
       return res.json({
-        reply: "🎉 You’ve completed the entire adventure. Say hello to play again.",
+        reply: "🎉 You’ve completed the adventure. Say hello to play again.",
       });
     }
 
@@ -118,10 +122,12 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: current.clue });
     }
 
-    // ----- YES / NO CHECK (“is it the …”) -----
+    // ----- YES / NO CHECK -----
     if (message.startsWith("is it")) {
+      const cleaned = message.replace(/[^a-z\s]/g, "").trim();
+
       const correct = current.answers.some((ans) =>
-        message.includes(ans)
+        cleaned.includes(ans)
       );
 
       return res.json({
@@ -149,27 +155,30 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // ----- AI: FACTUAL QUESTIONS ONLY -----
+    // ----- AI QUESTIONS (HELPFUL BUT INDIRECT) -----
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content: `
-You are a strict London adventure moderator.
+You are guiding a player to a specific London location.
 
 Rules:
-- Answer short factual questions only.
-- Never confirm, deny, or imply a landmark name.
-- If the question helps solve the puzzle, politely refuse.
-- Do not invent clues.
-- Keep answers brief.
+- Answer questions helpfully and truthfully.
+- Do NOT say the name of the location.
+- Do NOT move ahead to future locations.
+- Keep answers indirect and guiding.
+- Assume the user is standing somewhere in London.
           `,
         },
-        { role: "user", content: message },
+        {
+          role: "user",
+          content: message,
+        },
       ],
-      max_tokens: 60,
-      temperature: 0.2,
+      max_tokens: 80,
+      temperature: 0.4,
     });
 
     res.json({ reply: ai.choices[0].message.content });
@@ -177,7 +186,7 @@ Rules:
   } catch (err) {
     console.error("🔥 SERVER ERROR:", err);
     res.json({
-      reply: "Bot: Something went wrong, but the game is still running.",
+      reply: "Something went wrong, but the game is still running.",
     });
   }
 });
