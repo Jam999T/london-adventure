@@ -28,7 +28,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ----- GAME LOCATIONS (ORDER LOCKED) -----
+// ----- LOCATIONS (STRICT ORDER, 1 CLUE EACH) -----
 const LOCATIONS = [
   {
     answers: ["wellington"],
@@ -62,11 +62,12 @@ Meat is king — you’ve found the Hawk of Moor.`,
 // ----- CHAT ENDPOINT -----
 app.post("/chat", async (req, res) => {
   try {
-    // Create game state per user
+    // Init game per user
     if (!req.session.game) {
       req.session.game = {
         started: false,
         index: 0,
+        clueGiven: false,
       };
     }
 
@@ -74,28 +75,35 @@ app.post("/chat", async (req, res) => {
     const message = req.body.message?.toLowerCase().trim();
 
     if (!message) {
-      return res.json({ reply: "Say something when you're ready." });
+      return res.json({ reply: "Say something when you’re ready." });
     }
 
     // ----- START GAME -----
     if (!game.started) {
       game.started = true;
       return res.json({
-        reply: "Welcome. Ask for the clue when you’re ready.",
+        reply: "Welcome to the London Adventure. Ask for the clue when ready.",
       });
     }
 
     const current = LOCATIONS[game.index];
 
-    // ----- END OF GAME -----
+    // ----- END GAME -----
     if (!current) {
       return res.json({
-        reply: "🎉 You’ve reached the final destination. Well done.",
+        reply: "🎉 You’ve completed the entire adventure. Well done.",
       });
     }
 
-    // ----- GIVE CLUE -----
+    // ----- CLUE HANDLING (LOCKED) -----
     if (message === "clue" || message === "hint") {
+      if (game.clueGiven) {
+        return res.json({
+          reply: "There is only one clue for this location.",
+        });
+      }
+
+      game.clueGiven = true;
       return res.json({ reply: current.clue });
     }
 
@@ -106,45 +114,50 @@ app.post("/chat", async (req, res) => {
 
     if (correct) {
       game.index++;
+      game.clueGiven = false;
 
       if (game.index >= LOCATIONS.length) {
         return res.json({
-          reply: "Correct. 🎉 You’ve completed the entire London adventure.",
+          reply: "Correct. 🎉 You have completed the London Adventure.",
         });
       }
 
       return res.json({
-        reply: "Correct. Ask for the next clue when you are ready.",
+        reply: "Correct. Ask for the next clue when ready.",
       });
     }
 
-    // ----- AI QUESTION ANSWERING (NO PROGRESSION) -----
+    // ----- AI FACTUAL QUESTIONS ONLY -----
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content: `
-You are a cryptic London game master.
-You hold the three locstions that the user wants to visit.
-Answer factual or directional questions briefly.
-Never reveal place names.
-Never confirm or deny guesses.
-Do not advance the game.
+You are a strict London game moderator.
+
+Rules:
+- You may answer short factual questions.
+- You MUST NOT give hints, clues, riddles, nudges, or directional help.
+- You MUST NOT confirm or deny guesses.
+- If the user asks for help solving, say they must use the clue.
+- Never reveal or imply landmark names.
+
+If a question would act as a hint, politely refuse.
           `,
         },
         { role: "user", content: message },
       ],
       max_tokens: 60,
-      temperature: 0.4,
+      temperature: 0.2,
     });
 
     res.json({ reply: ai.choices[0].message.content });
 
   } catch (err) {
-    console.error("SERVER ERROR:", err);
+    console.error("🔥 SERVER ERROR:", err);
     res.json({
-      reply: "Bot: Something went wrong, but the game continues.",
+      reply: "Bot: Something went wrong, but the game is still active.",
     });
   }
 });
