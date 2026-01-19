@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>London Adventure</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+  input { width: 80%; padding: 10px; }
+  button { padding: 10px; }
+  #chat { margin-top: 20px; border: 1px solid #ccc; padding: 10px; min-height: 200px; }
+  .message { margin-bottom: 10px; }
+  .user { font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>London Adventure</h1>
+
+<input id="userInput" placeholder="Type a message...">
+<button onclick="sendMessage()">Send</button>
+
+<div id="chat"></div>
+
+<script>
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const msg = input.value;
+  if(!msg) return;
+  
+  appendMessage('You', msg);
+  input.value = '';
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await res.json();
+    appendMessage('Bot', data.reply);
+  } catch(e) {
+    appendMessage('Bot', 'Error communicating with server.');
+  }
+}
+
+function appendMessage(sender, text) {
+  const div = document.createElement('div');
+  div.className = 'message';
+  div.innerHTML = `<span class="${sender.toLowerCase()}">${sender}:</span> ${text}`;
+  document.getElementById('chat').appendChild(div);
+  div.scrollIntoView();
+}
+</script>
+</body>
+</html>
