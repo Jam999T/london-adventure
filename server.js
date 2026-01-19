@@ -32,7 +32,7 @@ const openai = new OpenAI({
 const LOCATIONS = [
   {
     name: "Wellington Statue",
-    answers: ["wellington", "duke of wellington"],
+    answers: ["wellington", "duke of wellington", "statue of wellington near the bank od england"],
     clue: `Rubber treads where leather once would step,
 A victor waits where coin and columns bide.
 Seek the Duke whose name keeps rain at bay`,
