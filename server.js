@@ -86,7 +86,7 @@ app.post("/chat", async (req, res) => {
     if (!game.started) {
       game.started = true;
       return res.json({
-        reply: "Welcome to the London Adventure. Ask for the clue when ready.",
+        reply: "Welcome to the OLC AIMazing Adventure. Type 'clue' when ready.",
       });
     }
 
@@ -100,7 +100,7 @@ app.post("/chat", async (req, res) => {
         clueGiven: false,
       };
       return res.json({
-        reply: "🎉 You’ve completed the adventure. Say hello to play again.",
+        reply: "🎉 You’ve completed the OLC AIMazing adventure. Have a fabulous eavning.",
       });
     }
 
@@ -124,7 +124,7 @@ app.post("/chat", async (req, res) => {
       game.clueGiven = false;
       if (game.index >= LOCATIONS.length) {
         return res.json({
-          reply: "Correct. 🎉 You have completed the London Adventure.",
+          reply: "🎉 You’ve completed the OLC AIMazing adventure. Have a fabulous eavning.",
         });
       }
       return res.json({
