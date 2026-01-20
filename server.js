@@ -146,7 +146,8 @@ Rules:
 - Do NOT reveal the landmark name unless the user guesses correctly.
 - Stay on the current location.
 - Keep answers indirect, guiding, and truthful.
-- Do not mention future locations.
+- Do NOT mention future locations.
+- Do NOT refence the houses of parliment of Big Ben.
           `,
         },
         {
