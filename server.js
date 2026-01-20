@@ -32,7 +32,7 @@ const openai = new OpenAI({
 const LOCATIONS = [
   {
     name: "Wellington Statue",
-    answers: ["wellington", "duke of wellington", "statue of wellington near the bank od england"],
+    answers: ["wellington", "duke of wellington"],
     clue: `Rubber treads where leather once would step,
 A victor waits where coin and columns bide.
 Seek the Duke whose name keeps rain at bay`,
@@ -66,13 +66,8 @@ Meat is king — you’ve found the Hawk of Moor.`,
 // ----- CHAT ENDPOINT -----
 app.post("/chat", async (req, res) => {
   try {
-    // ----- SAFE SESSION INIT -----
-    if (
-      !req.session.game ||
-      typeof req.session.game.index !== "number" ||
-      req.session.game.index < 0 ||
-      req.session.game.index > LOCATIONS.length
-    ) {
+    // ----- INIT GAME SESSION -----
+    if (!req.session.game) {
       req.session.game = {
         started: false,
         index: 0,
@@ -104,72 +99,54 @@ app.post("/chat", async (req, res) => {
         index: 0,
         clueGiven: false,
       };
-
       return res.json({
         reply: "🎉 You’ve completed the adventure. Say hello to play again.",
       });
     }
 
-    // ----- CLUE -----
+    // ----- CLUE HANDLING -----
     if (message === "clue" || message === "hint") {
       if (game.clueGiven) {
         return res.json({
           reply: "There is only one clue for this location.",
         });
       }
-
       game.clueGiven = true;
       return res.json({ reply: current.clue });
     }
 
-    // ----- YES / NO CHECK -----
-    if (message.startsWith("is it")) {
-      const cleaned = message.replace(/[^a-z\s]/g, "").trim();
-
-      const correct = current.answers.some((ans) =>
-        cleaned.includes(ans)
-      );
-
-      return res.json({
-        reply: correct ? "Yes." : "No.",
-      });
-    }
-
-    // ----- DIRECT GUESS -----
+    // ----- CHECK DIRECT GUESS -----
     const guessedCorrectly = current.answers.some((ans) =>
       message.includes(ans)
     );
-
     if (guessedCorrectly) {
       game.index++;
       game.clueGiven = false;
-
       if (game.index >= LOCATIONS.length) {
         return res.json({
           reply: "Correct. 🎉 You have completed the London Adventure.",
         });
       }
-
       return res.json({
         reply: "Correct. Ask for the next clue when ready.",
       });
     }
 
-    // ----- AI QUESTIONS (HELPFUL BUT INDIRECT) -----
+    // ----- AI HANDLES ALL OTHER QUESTIONS -----
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content: `
-You are guiding a player to a specific London location.
+You are a helpful London adventure guide.
 
 Rules:
-- Answer questions helpfully and truthfully.
-- Do NOT say the name of the location.
-- Do NOT move ahead to future locations.
-- Keep answers indirect and guiding.
-- Assume the user is standing somewhere in London.
+- Answer questions about the current location.
+- Do NOT reveal the landmark name unless the user guesses correctly.
+- Stay on the current location.
+- Keep answers indirect, guiding, and truthful.
+- Do not mention future locations.
           `,
         },
         {
@@ -182,7 +159,6 @@ Rules:
     });
 
     res.json({ reply: ai.choices[0].message.content });
-
   } catch (err) {
     console.error("🔥 SERVER ERROR:", err);
     res.json({
