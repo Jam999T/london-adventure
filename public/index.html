@@ -37,9 +37,9 @@ async function sendMessage() {
       body: JSON.stringify({ message: msg })
     });
     const data = await res.json();
-    appendMessage('Bot', data.reply);
+    appendMessage('SBOT', data.reply);
   } catch(e) {
-    appendMessage('Bot', 'Error communicating with server.');
+    appendMessage('SBOT', 'Error communicating with server.');
   }
 }
 
