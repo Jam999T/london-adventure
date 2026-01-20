@@ -128,7 +128,7 @@ app.post("/chat", async (req, res) => {
         });
       }
       return res.json({
-        reply: "Correct. Ask for the next clue when ready.",
+        reply: "Correct. Ask for 'clue' when ready.",
       });
     }
 
